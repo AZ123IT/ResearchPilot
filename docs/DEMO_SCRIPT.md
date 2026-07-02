@@ -1,4 +1,4 @@
-# ResearchPilot Demo Script
+# Research Pilot Demo Guide
 
 ## Start Backend In Demo Mode
 
@@ -34,7 +34,7 @@ http://127.0.0.1:3000/research
 What are recent methods for improving RAG faithfulness?
 ```
 
-## What To Point Out
+## What To Check
 
 - The page is a workflow dashboard, not a chat app.
 - The top metric row shows step count, MCP call count, and cache state.
@@ -48,7 +48,7 @@ What are recent methods for improving RAG faithfulness?
 
 ## How To Explain Fallback Behavior
 
-In normal mode, the search tool tries arXiv first, can fall back to Semantic Scholar, and can use short-lived cache results after an external failure. In demo mode, the workflow uses local fixture papers so the presentation is stable without relying on network availability. Demo mode is clearly labeled and does not pretend fixture data came from live external APIs.
+In normal mode, the search tool tries arXiv first, can fall back to Semantic Scholar, and can use short-lived cache results after an external failure. In demo mode, the workflow uses local fixture papers so the run is reproducible without relying on network availability. Demo mode is clearly labeled and does not pretend fixture data came from live external APIs.
 
 ## Optional API Smoke
 

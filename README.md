@@ -136,7 +136,7 @@ supabase/
 docs/
   ARCHITECTURE.md
   DEMO_SCRIPT.md
-  INTERVIEW_NOTES.md
+  PROJECT_NOTES.md
   screenshots/
 scripts/
   run_backend.sh
@@ -241,7 +241,7 @@ scripts/run_frontend.sh
 What are recent methods for improving RAG faithfulness?
 ```
 
-演示时可以重点看：
+运行后可以重点查看：
 
 1. 顶部指标：papers、claims、citations、calls。
 2. Literature review：findings、methods、limitations 和 evidence snippets。

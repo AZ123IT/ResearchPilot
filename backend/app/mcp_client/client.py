@@ -66,8 +66,8 @@ class LocalToolClient:
 class MCPToolClient:
     """MCP stdio protocol adapter.
 
-    The client starts the configured MCP stdio server command for each call. This is
-    simple and reliable for a portfolio demo; a persistent session can be added later.
+    The client starts the configured MCP stdio server command for each call. This keeps
+    one-shot protocol calls isolated from the persistent-session adapter.
     """
 
     def __init__(self, settings: Settings | None = None, fallback_client: LocalToolClient | None = None):
