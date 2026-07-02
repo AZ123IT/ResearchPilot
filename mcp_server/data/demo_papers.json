@@ -1,0 +1,42 @@
+[
+  {
+    "paper_id": "demo-rag-faithfulness-2025",
+    "title": "Faithfulness Audits for Retrieval Augmented Generation",
+    "authors": ["Mina Park", "Elias Chen"],
+    "abstract": "Retrieval augmented generation systems improve faithfulness when answers cite retrieved evidence, compare generated claims against source passages, and abstain when retrieval support is missing. The study evaluates citation coverage, answer-source entailment, and unsupported-claim rate as practical metrics for local research assistants.",
+    "published_date": "2025-02-10",
+    "source": "demo",
+    "url": "https://example.local/researchpilot/demo-rag-faithfulness-2025",
+    "citation_count": null
+  },
+  {
+    "paper_id": "demo-tool-agents-2025",
+    "title": "Tool-Using Agents for Research Automation",
+    "authors": ["Avery Morgan", "Lina Torres"],
+    "abstract": "Research agents become easier to audit when planning, search, tool calls, and synthesis are represented as separate workflow steps. The paper describes tool schemas, call logs, fallback handling, and human-readable traces for multi-agent literature discovery.",
+    "published_date": "2025-03-18",
+    "source": "demo",
+    "url": "https://example.local/researchpilot/demo-tool-agents-2025",
+    "citation_count": null
+  },
+  {
+    "paper_id": "demo-rag-evaluation-2024",
+    "title": "Evaluation Metrics for Retrieval Augmented Generation",
+    "authors": ["Noor Singh", "Mateo Alvarez"],
+    "abstract": "Common retrieval augmented generation evaluation combines retrieval recall, context precision, grounded answer faithfulness, citation accuracy, and abstention behavior. The authors argue that metric dashboards should separate retrieval quality from generation quality so failures are easier to diagnose.",
+    "published_date": "2024-11-05",
+    "source": "demo",
+    "url": "https://example.local/researchpilot/demo-rag-evaluation-2024",
+    "citation_count": null
+  },
+  {
+    "paper_id": "demo-memory-research-2024",
+    "title": "Persistent Memory for Academic Research Assistants",
+    "authors": ["Iris Okafor"],
+    "abstract": "Academic research assistants benefit from saving reusable notes with paper identifiers, titles, source links, and confidence labels. Lightweight memory can improve continuity across local demo sessions, but retrieved notes should remain visibly separate from newly searched papers.",
+    "published_date": "2024-09-22",
+    "source": "demo",
+    "url": "https://example.local/researchpilot/demo-memory-research-2024",
+    "citation_count": null
+  }
+]

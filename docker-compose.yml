@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: researchpilot-postgres
+    environment:
+      POSTGRES_DB: researchpilot
+      POSTGRES_USER: researchpilot
+      POSTGRES_PASSWORD: researchpilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+volumes:
+  postgres_data:
