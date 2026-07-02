@@ -281,7 +281,7 @@ npm --prefix frontend run typecheck
 - 不要把 `DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 或任何 API key 放进截图、commit、issue 或 README。
 - 只有 `NEXT_PUBLIC_` 前缀的变量可以被前端读取。
 - demo mode 使用本地 fixture paper，并明确标记为 `source: "demo"`，不会伪装成真实 arXiv 或 Semantic Scholar 结果。
-- 当前项目没有登录系统，定位是本地作品集 demo，不是多用户生产系统。
+- 当前项目没有登录系统，定位是本地单用户研究工具，不是多用户生产系统。
 
 ## 已知限制
 
@@ -299,7 +299,7 @@ npm --prefix frontend run typecheck
 - 优化 arXiv / Semantic Scholar 的跨源排序。
 - 增加生产级 auth、部署配置和浏览器端 E2E 测试。
 
-## 简历描述参考
+## 技术亮点摘要
 
 - 基于 Next.js、FastAPI、LangGraph 和自定义 MCP Server 构建本地学术研究助手，支持论文检索、详情获取、证据抽取、引用生成、prior-note reuse 和 structured literature review。
 - 设计多步骤 Agent workflow，覆盖 planning、note search、paper search、fetch detail、summary extraction、evidence verification、citation formatting 和 note saving，并在前端展示 step trace 与 tool call logs。
