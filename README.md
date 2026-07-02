@@ -1,12 +1,12 @@
-# ResearchPilot：MCP 学术科研效率助手
+# Research Pilot：MCP 学术科研效率助手
 
-ResearchPilot 是一个本地运行的 AI 学术研究工作流助手。用户输入研究问题后，系统会通过 LangGraph 编排多步骤 workflow，调用自定义 MCP Server 工具完成论文检索、历史 notes 复用、论文详情获取、摘要发现、证据校验、引用生成和 structured literature review 展示。
+Research Pilot 是一个本地运行的 AI 学术研究工作流助手。用户输入研究问题后，系统会通过 LangGraph 编排多步骤 workflow，调用自定义 MCP Server 工具完成论文检索、历史 notes 复用、论文详情获取、摘要发现、证据校验、引用生成和 structured literature review 展示。
 
-这个项目的重点不是做一个普通 RAG 聊天框，而是把 agent 的执行过程暴露出来：前端 dashboard 会展示每个 workflow step、MCP tool call、fallback 状态、证据片段、confidence label、引用和 warnings，方便调试、演示和面试讲解。
+这个项目的重点不是做一个普通 RAG 聊天框，而是把 agent 的执行过程暴露出来：前端 dashboard 会展示每个 workflow step、MCP tool call、fallback 状态、证据片段、confidence label、引用和 warnings，让用户能够看到结论从哪些论文、证据和工具调用中产生，提高研究过程的透明度和可追溯性。
 
 ## 演示截图
 
-![ResearchPilot literature review dashboard](docs/screenshots/researchpilot-review-dashboard.png)
+![Research Pilot literature review dashboard](docs/screenshots/researchpilot-review-dashboard.png)
 
 更多本地演示截图：
 
@@ -95,7 +95,7 @@ flowchart LR
 
 ## Agent Workflow
 
-ResearchPilot 的后端不是一个单次 completion，而是固定、可追踪的 workflow：
+Research Pilot 的后端不是一个单次 completion，而是固定、可追踪的 workflow：
 
 1. `plan_research_task`：生成研究计划和目标来源。
 2. `search_notes`：优先检索历史 research notes。
