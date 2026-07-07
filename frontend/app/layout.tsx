@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Research Pilot",
+  title: "ResearchPilot",
   description: "MCP-based academic research assistant",
   icons: {
     icon: "/favicon.svg",

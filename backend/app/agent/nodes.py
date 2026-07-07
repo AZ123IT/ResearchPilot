@@ -8,13 +8,27 @@ from app.agent.state import ResearchGraphState
 from app.core.config import get_settings
 from app.llm.deepseek_client import DeepSeekClient
 from app.mcp_client.client import get_research_tool_client
-from app.models.schemas import AgentStep, Citation, EvidenceItem, Finding, LiteratureReview, Paper, ResearchNote, ToolCallLog
+from app.models.schemas import (
+    AdaptiveSearchReport,
+    AgentStep,
+    Citation,
+    EvidenceCoverageItem,
+    EvidenceItem,
+    Finding,
+    LiteratureReview,
+    Paper,
+    ResearchNote,
+    ResearchPlanStep,
+    ToolCallLog,
+)
 from app.services.verification_service import verify_findings
 
 
 def plan_research_task(state: ResearchGraphState) -> dict[str, Any]:
     planned_sources = ["demo"] if get_settings().demo_mode else ["arxiv", "semantic_scholar"]
+    plan = _research_plan(planned_sources, state["citation_style"])
     return {
+        "research_plan": plan,
         "steps": _with_step(
             state,
             AgentStep(
@@ -22,7 +36,7 @@ def plan_research_task(state: ResearchGraphState) -> dict[str, Any]:
                 status="success",
                 summary="Prepared a scoped academic search and evidence review plan.",
                 input={"question": state["question"], "max_results": state["max_results"]},
-                output_preview={"planned_sources": planned_sources, "citation_style": state["citation_style"]},
+                output_preview={"planned_sources": planned_sources, "citation_style": state["citation_style"], "plan_steps": len(plan)},
             ),
         )
     }
@@ -81,6 +95,24 @@ def search_papers_node(state: ResearchGraphState) -> dict[str, Any]:
         call=lambda: client.search_papers(**tool_input),
     )
     papers = [Paper.model_validate(paper) for paper in result.get("papers", [])]
+    logs = _with_log(state, log)
+    steps = _with_step(
+        state,
+        AgentStep(
+            step_name="search_papers",
+            status=log.status,
+            tool_name="search_papers",
+            summary=f"Retrieved {len(papers)} candidate papers.",
+            input=tool_input,
+            output_preview={
+                "paper_count": len(papers),
+                "source": result.get("source"),
+                "cache_used": bool(result.get("cache_used", False)),
+            },
+            duration_ms=log.duration_ms,
+            fallback_used=log.fallback_used,
+        ),
+    )
     warnings = _unique([*state.get("warnings", []), *result.get("warnings", [])])
     fallback_summary = list(state.get("fallback_summary", []))
     if result.get("fallback_used"):
@@ -90,31 +122,70 @@ def search_papers_node(state: ResearchGraphState) -> dict[str, Any]:
             fallback_summary.append(f"Paper search used fallback path from source={result.get('source')}.")
     if result.get("cache_used"):
         fallback_summary.append("Paper search used cached results.")
+    search_source_summary = result.get("search_source_summary", state.get("search_source_summary", {}))
+    cache_used = bool(result.get("cache_used", False))
+    adaptive_search = AdaptiveSearchReport(initial_query=state["question"], search_rounds=1)
+
+    if _should_run_adaptive_search(papers, state["max_results"]):
+        refined_query = _refined_search_query(state["question"])
+        refined_tool_input = {
+            "query": refined_query,
+            "max_results": state["max_results"] - len(papers),
+            "source": "auto",
+        }
+        refined_result, refined_log = _call_tool(
+            state,
+            step_name="adaptive_search",
+            tool_name="search_papers",
+            tool_input=refined_tool_input,
+            call=lambda: client.search_papers(**refined_tool_input),
+        )
+        refined_papers = [Paper.model_validate(paper) for paper in refined_result.get("papers", [])]
+        merged_papers = _merge_papers(papers, refined_papers)
+        added_papers = len(merged_papers) - len(papers)
+        papers = merged_papers
+        logs.append(refined_log)
+        warnings = _unique([*warnings, *refined_result.get("warnings", [])])
+        search_source_summary = _merge_source_summary(search_source_summary, refined_result.get("search_source_summary", {}))
+        cache_used = cache_used or bool(refined_result.get("cache_used", False))
+        if refined_result.get("fallback_used"):
+            fallback_summary.append(f"Adaptive search used fallback path from source={refined_result.get('source')}.")
+        if refined_result.get("cache_used"):
+            fallback_summary.append("Adaptive search used cached results.")
+        adaptive_search = AdaptiveSearchReport(
+            triggered=True,
+            reason="Initial search returned fewer papers than requested; refined query to improve evidence coverage.",
+            initial_query=state["question"],
+            refined_query=refined_query,
+            added_papers=added_papers,
+            search_rounds=2,
+        )
+        steps.append(
+            AgentStep(
+                step_name="adaptive_search",
+                status=refined_log.status,
+                tool_name="search_papers",
+                summary=f"Refined search added {added_papers} papers for stronger evidence coverage.",
+                input=refined_tool_input,
+                output_preview={
+                    "added_papers": added_papers,
+                    "refined_query": refined_query,
+                    "paper_count": len(papers),
+                },
+                duration_ms=refined_log.duration_ms,
+                fallback_used=refined_log.fallback_used,
+            )
+        )
 
     return {
         "searched_papers": papers,
         "warnings": warnings,
-        "search_source_summary": result.get("search_source_summary", state.get("search_source_summary", {})),
+        "search_source_summary": search_source_summary,
         "fallback_summary": _unique(fallback_summary),
-        "cache_used": bool(result.get("cache_used", False)),
-        "tool_call_logs": _with_log(state, log),
-        "steps": _with_step(
-            state,
-            AgentStep(
-                step_name="search_papers",
-                status=log.status,
-                tool_name="search_papers",
-                summary=f"Retrieved {len(papers)} candidate papers.",
-                input=tool_input,
-                output_preview={
-                    "paper_count": len(papers),
-                    "source": result.get("source"),
-                    "cache_used": bool(result.get("cache_used", False)),
-                },
-                duration_ms=log.duration_ms,
-                fallback_used=log.fallback_used,
-            ),
-        ),
+        "cache_used": cache_used,
+        "adaptive_search": adaptive_search,
+        "tool_call_logs": logs,
+        "steps": steps,
     }
 
 
@@ -223,6 +294,7 @@ def verify_evidence_node(state: ResearchGraphState) -> dict[str, Any]:
     return {
         "extracted_findings": verified,
         "evidence_items": evidence_items,
+        "evidence_coverage": _coverage_for_findings(verified),
         "low_confidence_claims": low_confidence,
         "steps": _with_step(
             state,
@@ -367,7 +439,7 @@ def generate_final_review_node(state: ResearchGraphState) -> dict[str, Any]:
         "External metadata sources may omit abstracts, publication dates, or citation counts.",
     ]
     if any(paper.source == "demo" for paper in papers):
-        limitations.append("Demo mode uses local fixture papers for reproducible local runs and does not represent live external search.")
+        limitations.append("Demo mode uses local fixture papers for stable local presentation and does not represent live external search.")
     if not get_settings().deepseek_api_key:
         limitations.append("No DeepSeek API key was configured, so findings were generated by deterministic abstract extraction.")
     review = LiteratureReview(
@@ -386,6 +458,7 @@ def generate_final_review_node(state: ResearchGraphState) -> dict[str, Any]:
 
     return {
         "final_review": review,
+        "research_plan": _completed_research_plan(state.get("research_plan", [])),
         "steps": _with_step(
             state,
             AgentStep(
@@ -456,6 +529,124 @@ def _run_async(awaitable: Awaitable[dict]) -> dict:
     if "error" in holder:
         raise holder["error"]
     return holder["result"]
+
+
+def _research_plan(planned_sources: list[str], citation_style: str) -> list[ResearchPlanStep]:
+    source_text = ", ".join(planned_sources)
+    return [
+        ResearchPlanStep(
+            step_id="scope",
+            title="Scope research task",
+            rationale="Clarify the question, result limit, expected sources, and citation format before tool calls.",
+        ),
+        ResearchPlanStep(
+            step_id="memory",
+            title="Search prior notes",
+            rationale="Reuse local memory first so repeated research questions can benefit from previous findings.",
+            tool_name="search_notes",
+        ),
+        ResearchPlanStep(
+            step_id="search",
+            title="Search academic papers",
+            rationale=f"Query {source_text} for candidate papers and widen the query if evidence coverage is thin.",
+            tool_name="search_papers",
+        ),
+        ResearchPlanStep(
+            step_id="metadata",
+            title="Fetch paper metadata",
+            rationale="Resolve paper details before extracting findings, citations, and source previews.",
+            tool_name="fetch_paper_detail",
+        ),
+        ResearchPlanStep(
+            step_id="extract",
+            title="Extract candidate findings",
+            rationale="Turn abstracts into concise candidate claims for later verification.",
+        ),
+        ResearchPlanStep(
+            step_id="verify",
+            title="Verify evidence coverage",
+            rationale="Check each claim against available abstracts and assign confidence labels.",
+        ),
+        ResearchPlanStep(
+            step_id="cite",
+            title="Format citations",
+            rationale=f"Generate {citation_style} citations for every selected paper.",
+            tool_name="format_citation",
+        ),
+        ResearchPlanStep(
+            step_id="save",
+            title="Save supported notes",
+            rationale="Persist supported findings so future runs can reuse them as memory.",
+            tool_name="save_to_notes",
+        ),
+        ResearchPlanStep(
+            step_id="review",
+            title="Generate final review",
+            rationale="Assemble the structured literature review, methods, limitations, and traceable evidence.",
+        ),
+    ]
+
+
+def _completed_research_plan(plan: list[ResearchPlanStep]) -> list[ResearchPlanStep]:
+    return [step.model_copy(update={"status": "completed"}) for step in plan]
+
+
+def _should_run_adaptive_search(papers: list[Paper], max_results: int) -> bool:
+    if not papers or len(papers) >= max_results:
+        return False
+    return any(paper.source != "demo" for paper in papers)
+
+
+def _refined_search_query(question: str) -> str:
+    return f"{question} evidence coverage citation verification"
+
+
+def _merge_papers(existing: list[Paper], candidates: list[Paper]) -> list[Paper]:
+    seen = {(paper.paper_id or "").lower() or paper.title.lower() for paper in existing}
+    merged = list(existing)
+    for paper in candidates:
+        key = (paper.paper_id or "").lower() or paper.title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(paper)
+    return merged
+
+
+def _merge_source_summary(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(current or {})
+    for key, value in (incoming or {}).items():
+        if isinstance(value, int) and isinstance(merged.get(key), int):
+            merged[key] += value
+        else:
+            merged[key] = value
+    return merged
+
+
+def _coverage_for_findings(findings: list[Finding]) -> list[EvidenceCoverageItem]:
+    coverage: list[EvidenceCoverageItem] = []
+    for finding in findings:
+        has_source = bool(finding.evidence_paper_title and finding.evidence_snippet)
+        if has_source and finding.confidence in {"high", "medium"}:
+            support_status = "supported"
+            note = "Supported by matched abstract evidence."
+        elif has_source or finding.confidence == "low":
+            support_status = "weak"
+            note = "Only partial abstract support was found."
+        else:
+            support_status = "unsupported"
+            note = "No source snippet matched this claim."
+        coverage.append(
+            EvidenceCoverageItem(
+                claim=finding.text,
+                support_status=support_status,
+                confidence=finding.confidence,
+                source_count=1 if has_source else 0,
+                paper_titles=[finding.evidence_paper_title] if finding.evidence_paper_title else [],
+                note=note,
+            )
+        )
+    return coverage
 
 
 def _fallback_findings(papers: list[Paper], question: str) -> list[Finding]:

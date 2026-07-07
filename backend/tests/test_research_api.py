@@ -97,6 +97,12 @@ def test_research_run_endpoint_returns_structured_response(monkeypatch):
     assert "fallback_summary" in payload
     assert payload["memory_storage"] == "memory"
     assert payload["cache_used"] is False
+    assert payload["research_plan"]
+    assert payload["research_plan"][0]["title"] == "Scope research task"
+    assert payload["evidence_coverage"]
+    assert payload["evidence_coverage"][0]["support_status"] == "supported"
+    assert payload["adaptive_search"]["search_rounds"] >= 1
+    assert payload["adaptive_search"]["initial_query"] == "What improves RAG faithfulness?"
 
 
 def test_research_run_endpoint_completes_in_demo_mode_without_external_keys(monkeypatch):
@@ -126,3 +132,5 @@ def test_research_run_endpoint_completes_in_demo_mode_without_external_keys(monk
     assert any("DeepSeek API key is not configured" in warning for warning in payload["warnings"])
     assert payload["literature_review"]["summary"].startswith("Reviewed 2 demo papers")
     assert payload["literature_review"]["key_findings"]
+    assert payload["research_plan"]
+    assert payload["adaptive_search"]["triggered"] is False

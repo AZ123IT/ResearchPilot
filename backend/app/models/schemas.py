@@ -76,6 +76,32 @@ class ToolCallLog(BaseModel):
     error: str | None = None
 
 
+class ResearchPlanStep(BaseModel):
+    step_id: str
+    title: str
+    rationale: str
+    tool_name: str | None = None
+    status: Literal["planned", "completed", "skipped"] = "planned"
+
+
+class EvidenceCoverageItem(BaseModel):
+    claim: str
+    support_status: Literal["supported", "weak", "unsupported"]
+    confidence: Literal["high", "medium", "low"] | None = None
+    source_count: int = 0
+    paper_titles: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class AdaptiveSearchReport(BaseModel):
+    triggered: bool = False
+    reason: str | None = None
+    initial_query: str = ""
+    refined_query: str | None = None
+    added_papers: int = 0
+    search_rounds: int = 1
+
+
 class LiteratureReview(BaseModel):
     summary: str
     key_findings: list[str] = Field(default_factory=list)
@@ -96,8 +122,11 @@ class ResearchResponse(BaseModel):
     question: str
     steps: list[AgentStep] = Field(default_factory=list)
     tool_call_logs: list[ToolCallLog] = Field(default_factory=list)
+    research_plan: list[ResearchPlanStep] = Field(default_factory=list)
     papers: list[Paper] = Field(default_factory=list)
     evidence_items: list[EvidenceItem] = Field(default_factory=list)
+    evidence_coverage: list[EvidenceCoverageItem] = Field(default_factory=list)
+    adaptive_search: AdaptiveSearchReport = Field(default_factory=AdaptiveSearchReport)
     prior_notes: list[ResearchNote] = Field(default_factory=list)
     reused_notes: list[ResearchNote] = Field(default_factory=list)
     search_source_summary: dict[str, Any] = Field(default_factory=dict)

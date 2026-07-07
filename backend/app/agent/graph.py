@@ -12,7 +12,7 @@ from app.agent.nodes import (
     verify_evidence_node,
 )
 from app.agent.state import ResearchGraphState
-from app.models.schemas import LiteratureReview, ResearchRequest, ResearchResponse
+from app.models.schemas import AdaptiveSearchReport, LiteratureReview, ResearchRequest, ResearchResponse
 
 
 def build_research_graph():
@@ -47,11 +47,14 @@ def run_research_graph(request: ResearchRequest) -> ResearchResponse:
         "citation_style": request.citation_style,
         "searched_papers": [],
         "selected_papers": [],
+        "research_plan": [],
         "prior_notes": [],
         "reused_notes": [],
         "extracted_findings": [],
         "citations": [],
         "evidence_items": [],
+        "evidence_coverage": [],
+        "adaptive_search": AdaptiveSearchReport(initial_query=request.question),
         "low_confidence_claims": [],
         "tool_call_logs": [],
         "warnings": [],
@@ -68,8 +71,11 @@ def run_research_graph(request: ResearchRequest) -> ResearchResponse:
         question=request.question,
         steps=final_state.get("steps", []),
         tool_call_logs=final_state.get("tool_call_logs", []),
+        research_plan=final_state.get("research_plan", []),
         papers=final_state.get("selected_papers", []),
         evidence_items=final_state.get("evidence_items", []),
+        evidence_coverage=final_state.get("evidence_coverage", []),
+        adaptive_search=final_state.get("adaptive_search", AdaptiveSearchReport(initial_query=request.question)),
         prior_notes=final_state.get("prior_notes", []),
         reused_notes=final_state.get("reused_notes", []),
         search_source_summary=final_state.get("search_source_summary", {}),

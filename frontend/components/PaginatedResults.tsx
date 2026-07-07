@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AgentInsightPanel } from "@/components/AgentInsightPanel";
 import { CitationsPanel } from "@/components/CitationsPanel";
 import { LiteratureReview } from "@/components/LiteratureReview";
 import { SourcesTable } from "@/components/SourcesTable";
@@ -19,7 +20,12 @@ export function PaginatedResults({ response, isLoading }: PaginatedResultsProps)
     () => [
       {
         label: "Review",
-        content: <LiteratureReview isLoading={isLoading} response={response} />,
+        content: (
+          <div className="grid gap-3">
+            <AgentInsightPanel isLoading={isLoading} response={response} />
+            <LiteratureReview isLoading={isLoading} response={response} />
+          </div>
+        ),
       },
       {
         label: "Sources",

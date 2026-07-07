@@ -42,6 +42,14 @@ export interface ToolCallLog {
   error: string | null;
 }
 
+export interface ResearchPlanStep {
+  step_id: string;
+  title: string;
+  rationale: string;
+  tool_name: string | null;
+  status: "planned" | "completed" | "skipped";
+}
+
 export interface Finding {
   text: string;
   confidence: "high" | "medium" | "low";
@@ -55,6 +63,24 @@ export interface EvidenceItem {
   paper_title: string;
   abstract_snippet: string;
   confidence: "high" | "medium" | "low" | null;
+}
+
+export interface EvidenceCoverageItem {
+  claim: string;
+  support_status: "supported" | "weak" | "unsupported";
+  confidence: "high" | "medium" | "low" | null;
+  source_count: number;
+  paper_titles: string[];
+  note: string;
+}
+
+export interface AdaptiveSearchReport {
+  triggered: boolean;
+  reason: string | null;
+  initial_query: string;
+  refined_query: string | null;
+  added_papers: number;
+  search_rounds: number;
 }
 
 export interface ResearchNote {
@@ -90,8 +116,11 @@ export interface ResearchResponse {
   question: string;
   steps: AgentStep[];
   tool_call_logs: ToolCallLog[];
+  research_plan: ResearchPlanStep[];
   papers: Paper[];
   evidence_items: EvidenceItem[];
+  evidence_coverage: EvidenceCoverageItem[];
+  adaptive_search: AdaptiveSearchReport;
   prior_notes: ResearchNote[];
   reused_notes: ResearchNote[];
   search_source_summary: Record<string, unknown>;

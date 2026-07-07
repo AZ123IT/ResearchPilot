@@ -6,7 +6,7 @@ from tools.notes import save_to_notes_tool, search_notes_tool
 from tools.search_papers import search_papers_tool
 
 
-mcp = FastMCP("Research Pilot Research MCP Server")
+mcp = FastMCP("ResearchPilot Research MCP Server")
 
 
 @mcp.tool()

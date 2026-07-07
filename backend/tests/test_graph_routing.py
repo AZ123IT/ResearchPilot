@@ -88,6 +88,7 @@ def test_question_goes_through_full_workflow(monkeypatch):
         "plan_research_task",
         "search_notes",
         "search_papers",
+        "adaptive_search",
         "fetch_paper_details",
         "extract_summary",
         "verify_evidence",
@@ -103,6 +104,14 @@ def test_question_goes_through_full_workflow(monkeypatch):
     assert response.prior_notes
     assert response.reused_notes
     assert response.memory_storage == "memory"
+    assert [item.title for item in response.research_plan][:3] == [
+        "Scope research task",
+        "Search prior notes",
+        "Search academic papers",
+    ]
+    assert response.evidence_coverage
+    assert response.evidence_coverage[0].support_status == "supported"
+    assert response.adaptive_search.initial_query == "What improves RAG faithfulness?"
 
 
 def test_workflow_returns_warnings_when_external_search_fails(monkeypatch):
@@ -222,3 +231,71 @@ def test_deterministic_fallback_review_is_structured_and_marks_weak_evidence(mon
     assert any("abstracts" in limitation.lower() for limitation in response.literature_review.limitations)
     assert response.literature_review.low_confidence_claims
     assert any("DeepSeek API key is not configured" in warning for warning in response.warnings)
+
+
+def test_adaptive_search_runs_second_pass_when_initial_search_has_low_coverage(monkeypatch):
+    class AdaptiveToolClient(FakeToolClient):
+        def __init__(self):
+            self.queries: list[str] = []
+
+        async def search_papers(self, query: str, max_results: int, source: str = "auto"):
+            self.queries.append(query)
+            if len(self.queries) == 1:
+                return {
+                    "source": "auto",
+                    "papers": [
+                        {
+                            "paper_id": "initial-1",
+                            "title": "Initial RAG Evidence",
+                            "authors": ["Ada Lovelace"],
+                            "abstract": "RAG faithfulness improves when generated claims are checked against retrieved evidence.",
+                            "published_date": "2024-01-15",
+                            "source": "arxiv",
+                            "url": "https://example.local/initial-1",
+                            "citation_count": None,
+                        }
+                    ],
+                    "warnings": [],
+                    "fallback_used": False,
+                    "cache_used": False,
+                    "search_source_summary": {"arxiv": 1, "semantic_scholar": 0, "demo": 0, "cache": 0},
+                }
+            return {
+                "source": "auto",
+                "papers": [
+                    {
+                        "paper_id": "adaptive-1",
+                        "title": "Adaptive Search For RAG Audits",
+                        "authors": ["Grace Hopper"],
+                        "abstract": "Adaptive research agents refine search queries when initial evidence coverage is thin.",
+                        "published_date": "2025-02-20",
+                        "source": "semantic_scholar",
+                        "url": "https://example.local/adaptive-1",
+                        "citation_count": 7,
+                    }
+                ],
+                "warnings": [],
+                "fallback_used": True,
+                "cache_used": False,
+                "search_source_summary": {"arxiv": 0, "semantic_scholar": 1, "demo": 0, "cache": 0},
+            }
+
+    tool_client = AdaptiveToolClient()
+    monkeypatch.setattr("app.agent.nodes.get_research_tool_client", lambda: tool_client)
+
+    response = run_research_graph(
+        ResearchRequest(
+            question="What improves RAG faithfulness?",
+            max_results=2,
+            citation_style="IEEE",
+        )
+    )
+
+    assert len(tool_client.queries) == 2
+    assert "evidence coverage" in tool_client.queries[1]
+    assert response.adaptive_search.triggered is True
+    assert response.adaptive_search.added_papers == 1
+    assert response.adaptive_search.refined_query == tool_client.queries[1]
+    assert response.adaptive_search.search_rounds == 2
+    assert any(step.step_name == "adaptive_search" for step in response.steps)
+    assert len(response.papers) == 2

@@ -1,6 +1,6 @@
-# Research Pilot Architecture
+# ResearchPilot Architecture
 
-Research Pilot is a local academic research workflow dashboard. It is built to make an AI research assistant inspectable: each step, tool call, fallback path, warning, citation, and evidence confidence label is returned as structured data.
+ResearchPilot is a local academic research workflow dashboard. It is built to make an AI research assistant inspectable: each step, tool call, fallback path, warning, citation, and evidence confidence label is returned as structured data.
 
 ## System Overview
 
@@ -39,7 +39,7 @@ The graph in `backend/app/agent/graph.py` runs this sequence:
 8. `save_notes`
 9. `generate_final_review`
 
-This structure makes workflow behavior visible, auditable, and easier to evaluate in the dashboard timeline.
+This structure makes the workflow explainable in interviews and visible in the dashboard timeline.
 
 ## Tool Client Modes
 
@@ -64,7 +64,7 @@ External API behavior is mocked in tests.
 
 ## Long-Term Memory
 
-Research notes can be stored in Supabase using the schema in `supabase/schema.sql`. The schema is pgvector-ready with an `embedding vector(1536)` column, but the current implementation does not generate embeddings yet.
+Research notes can be stored in Supabase using the schema in `supabase/schema.sql`. The schema is pgvector-ready with an `embedding vector(1536)` column, but Stage 5 does not generate embeddings yet.
 
 When Supabase credentials are missing or Supabase fails, the note tools use in-memory fallback and return readable warnings. This keeps the local demo runnable without cloud credentials.
 
@@ -72,7 +72,7 @@ When Supabase credentials are missing or Supabase fails, the note tools use in-m
 
 Findings are checked against paper abstracts with keyword overlap. Supported findings receive evidence snippets and confidence labels. Weak or unsupported claims remain visible as low-confidence claims instead of being silently treated as facts.
 
-This is not a replacement for full-paper review. It is a lightweight guardrail for checking whether generated claims are grounded in the retrieved abstracts.
+This is not a replacement for full-paper review. It is a lightweight guardrail for a local portfolio demo.
 
 ## Frontend Dashboard
 
@@ -86,4 +86,4 @@ The dashboard in `frontend/app/research/page.tsx` renders:
 - LangGraph timeline.
 - MCP tool-call log with inputs and output previews.
 
-The UI is Tailwind-only and is designed to make workflow state, source evidence, and fallback behavior easy to scan during a research run.
+The UI is Tailwind-only and is designed for local screenshots, interviews, and presentation.

@@ -2,7 +2,19 @@ from typing import Any
 
 from typing_extensions import TypedDict
 
-from app.models.schemas import AgentStep, Citation, EvidenceItem, Finding, LiteratureReview, Paper, ResearchNote, ToolCallLog
+from app.models.schemas import (
+    AdaptiveSearchReport,
+    AgentStep,
+    Citation,
+    EvidenceCoverageItem,
+    EvidenceItem,
+    Finding,
+    LiteratureReview,
+    Paper,
+    ResearchNote,
+    ResearchPlanStep,
+    ToolCallLog,
+)
 
 
 class ResearchGraphState(TypedDict, total=False):
@@ -11,11 +23,14 @@ class ResearchGraphState(TypedDict, total=False):
     citation_style: str
     searched_papers: list[Paper]
     selected_papers: list[Paper]
+    research_plan: list[ResearchPlanStep]
     prior_notes: list[ResearchNote]
     reused_notes: list[ResearchNote]
     extracted_findings: list[Finding]
     citations: list[Citation]
     evidence_items: list[EvidenceItem]
+    evidence_coverage: list[EvidenceCoverageItem]
+    adaptive_search: AdaptiveSearchReport
     low_confidence_claims: list[str]
     tool_call_logs: list[ToolCallLog]
     warnings: list[str]

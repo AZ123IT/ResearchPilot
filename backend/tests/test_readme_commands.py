@@ -18,7 +18,7 @@ def test_readme_referenced_local_scripts_exist():
         assert (PROJECT_ROOT / script).exists()
 
 
-def test_quick_start_and_public_docs_exist():
+def test_quick_start_and_stage5_docs_exist():
     readme = (PROJECT_ROOT / "README.md").read_text()
 
     assert "## Quick Start" in readme
@@ -34,7 +34,7 @@ def test_quick_start_and_public_docs_exist():
 
     for doc in [
         "docs/ARCHITECTURE.md",
-        "docs/PROJECT_NOTES.md",
+        "docs/INTERVIEW_NOTES.md",
         "docs/DEMO_SCRIPT.md",
     ]:
         path = PROJECT_ROOT / doc

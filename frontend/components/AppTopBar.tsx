@@ -15,7 +15,7 @@ export function AppTopBar({ response, error, isLoading }: AppTopBarProps) {
     <header className="panel-surface rounded-lg px-3 py-2.5 sm:px-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-xl font-semibold tracking-normal text-slate-950 sm:text-2xl">Research Pilot</h1>
+          <h1 className="text-xl font-semibold tracking-normal text-slate-950 sm:text-2xl">ResearchPilot</h1>
           <span className={statusClass(status)}>{status}</span>
           {demoCount > 0 ? <span className="text-xs font-semibold text-amber-800">Demo {demoCount}</span> : <span className="text-xs font-semibold text-cyan-800">Local first</span>}
           {response?.memory_storage ? <span className="hidden text-xs font-medium text-slate-500 sm:inline">Memory {response.memory_storage}</span> : null}

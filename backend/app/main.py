@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Research Pilot API",
+    title="ResearchPilot API",
     description="MCP-based multi-step academic research assistant backend.",
     version="0.1.0",
     lifespan=lifespan,
