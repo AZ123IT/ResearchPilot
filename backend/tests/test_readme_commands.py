@@ -18,10 +18,10 @@ def test_readme_referenced_local_scripts_exist():
         assert (PROJECT_ROOT / script).exists()
 
 
-def test_quick_start_and_stage5_docs_exist():
+def test_local_setup_and_stage5_docs_exist():
     readme = (PROJECT_ROOT / "README.md").read_text()
 
-    assert "## Quick Start" in readme
+    assert "## 本地运行" in readme
     for command in [
         "python3 -m venv .venv",
         ".venv/bin/python -m pip install -r backend/requirements.txt -r mcp_server/requirements.txt",
