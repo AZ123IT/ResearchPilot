@@ -1,59 +1,37 @@
-# ResearchPilot Interview Notes
+# 技术问答与取舍
 
-## One-Minute Pitch
+[返回项目首页](../README.md) · [架构详解](ARCHITECTURE.md) · [验证记录](VALIDATION.md)
 
-ResearchPilot is a local AI research assistant that turns an academic question into an inspectable workflow. It searches papers, checks prior notes, verifies findings against abstracts, formats citations, saves reusable notes, and shows every LangGraph step and MCP tool call in a dashboard.
+## 这个项目解决什么问题？
 
-## Why This Is Not A Normal RAG Chatbot
+把论文搜索、摘要整理、来源关联、参考文献生成和运行记录串成一条流程，方便使用者做初步文献调研，并回到来源人工核对。重点是工具编排与执行过程可观察，不是自动生成可信的最终学术结论。
 
-Most RAG demos hide the retrieval and generation process behind one chat response. ResearchPilot exposes the workflow: search, detail lookup, evidence verification, citation formatting, memory, fallback behavior, and confidence labels are all visible.
+## 为什么使用 LangGraph？
 
-## Why MCP Server Matters
+九个节点分别更新共享研究状态，业务步骤与数据流有明确边界，也方便测试某个步骤失败后如何继续。普通函数也能完成这些操作；使用图结构是为了显式表达流程，不意味着系统已经具备自主规划或多智能体协作。
 
-The MCP server packages research capabilities behind a protocol boundary. The backend can call tools directly for tests, call a fresh MCP stdio server per request, or reuse a persistent MCP session. That makes the tool layer portable and easier to reason about than route-handler-only logic.
+## MCP 与本地函数调用有什么区别？
 
-## Why LangGraph Is Used
+默认 local 模式直接调用 Python 函数，适合开发和测试。MCP 模式通过 stdio、客户端会话和 FastMCP 工具注册跨越协议边界，让工具执行与后端编排解耦。这会增加进程、会话和超时管理成本，不能仅因为工具名称相同就将本地直调称为 MCP 通信。
 
-LangGraph makes the control flow explicit. Each node has a clear responsibility, and the final response can show exactly what happened. This is useful for debugging, evaluation, screenshots, and interview explanation.
+## 为什么提供持久会话？
 
-## Persistent MCP Session
+单次模式每次工具调用都会启动并关闭服务进程；持久模式复用进程与会话，减少重复启动操作，也让进程内笔记在该会话期间保留。当前通过后台线程的事件循环、队列与 Future 执行串行调用，不是数据库持久化或并行工具池。
 
-Persistent MCP mode avoids starting a new server process for every tool call. The backend owns a background event loop, starts one MCP stdio session, queues tool calls onto it, and shuts it down cleanly on FastAPI lifespan shutdown. If startup fails, local fallback can keep the workflow running.
+## 模型参与哪些环节？
 
-## Fallback And Cache
+DeepSeek 接收问题与前五篇论文的标题、摘要，用于抽取候选结论。规划、调用哪些工具、何时补搜、引用格式化和最终综述组装由代码控制。历史笔记返回界面展示，不进入模型上下文。
 
-Search begins with arXiv in normal mode. If arXiv fails or returns too few papers, Semantic Scholar can fill gaps. Successful results are cached briefly. Demo mode uses local fixture papers for a stable presentation and labels them honestly as `demo`.
+## 为什么有来源还不能证明结论正确？
 
-## Evidence-First Verification
+当前算法计算结论关键词在摘要中的覆盖比例，阈值为 high ≥ 0.55、medium ≥ 0.25。它不能判断语义、否定关系和问题相关性，摘要预览也不一定包含精确支持句。因此来源关联帮助人核对，但不能证明降低了幻觉，更不能把 high 当作准确率。
 
-The system does not promote unsupported generated claims to facts. It checks finding text against paper abstracts, attaches evidence snippets, and surfaces low-confidence claims. This reduces silent hallucination in the final review.
+## 服务失败时会发生什么？
 
-## Tests Written
+检索可以尝试其他来源或已有短期缓存；模型未配置或失败时使用规则式摘要提取；MCP 失败且允许回退时使用本地工具；Supabase 不可用时用内存笔记。各层回退都应结合日志与告警理解。真实检索失败不会自动切换到虚构 Demo 论文。
 
-The test suite covers:
+## 已经验证了什么，还缺什么？
 
-- Citation formatting.
-- Evidence verification.
-- MCP search, detail, citation, and note tools.
-- Semantic Scholar response normalization.
-- Demo mode and cache fallback.
-- MCP client mode selection and persistent fallback.
-- Graph routing and API response shape.
-- README/script reproducibility references.
-- Demo fixture required fields.
+已进行工作流、工具和 API 结构等回归测试、前端类型检查、生产构建，以及本地无密钥 Demo 的浏览器检查。具体日期和结果见验证记录。这些不等于真实检索质量、生产容量、完整安全性或所有 MCP 协议路径都经过验证。
 
-## Limitations
-
-- Uses abstracts, not full paper PDFs.
-- Keyword overlap is a lightweight verification heuristic, not a complete factuality model.
-- Supabase schema is pgvector-ready, but embeddings are not generated yet.
-- Demo papers are fixture data for stable local presentation, not live search results.
-- No deployment, auth, CI/CD, or GitHub remote setup is included in this local release candidate.
-
-## Future Improvements
-
-- Full PDF ingestion with section-level evidence.
-- pgvector similarity search over generated embeddings.
-- Streaming workflow events.
-- Better ranking across arXiv and Semantic Scholar.
-- Production auth and deployment once the local demo is stable.
+下一步优先建立真实查询与结论支持度评测，再改进排序、结构化抽取和语义校验；不为增加技术名词而扩展多智能体。

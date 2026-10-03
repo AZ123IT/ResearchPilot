@@ -1,354 +1,175 @@
-# ResearchPilot：MCP 学术科研效率助手
+# ResearchPilot
 
-ResearchPilot 是一个适合放在简历里的全栈 AI Agent 项目。用户输入一个学术研究问题后，系统会通过 LangGraph 编排多步骤研究 workflow，调用自定义 MCP-style research tools 完成论文检索、历史 notes 复用、论文详情获取、候选结论抽取、证据校验、引用生成和 structured literature review 展示。
+**把论文检索、摘要整理与引用生成，串成一条可追踪的研究工作流。**
 
-项目重点不是做一个普通 RAG 聊天框，而是把 agent 的执行过程暴露出来：前端 dashboard 会展示研究计划、每个 workflow step、tool call logs、fallback 状态、证据片段、confidence label、引用和 warnings，让用户能看到结论是从哪些论文、证据和工具调用中产生的。
+输入研究问题，获得候选论文、摘要级结论、来源关联和参考文献，并查看每一步的工具调用与降级记录。面向文献调研的初步整理，采用 **LangGraph 状态编排 + MCP 工具层 + Next.js 工作台**，当前为本地单用户应用。
 
-核心句：
+[界面预览](#界面预览) · [关键设计](#关键设计) · [本地运行](#本地运行) · [验证记录](docs/VALIDATION.md) · [架构详解](docs/ARCHITECTURE.md)
 
-> 输入研究问题，一键生成带证据、引用和可审计 workflow 的 literature review。
+## 项目概览
 
-当前版本定位是本地可运行的作品集项目，不是生产级多用户 SaaS 产品。
+| 使用者需要什么 | 系统如何处理 | 最终可以查看什么 |
+| --- | --- | --- |
+| 从研究问题开始查资料 | 检索 arXiv，结果不足时尝试 Semantic Scholar；按条件追加一轮查询 | 论文标题、作者、摘要与来源 |
+| 整理初步研究结论 | DeepSeek 从摘要抽取候选结论；未配置或失败时按规则选取摘要句子 | 结构化综述、方法说明与限制 |
+| 回到原始资料核对 | 按摘要关键词重合度关联论文，生成 IEEE / APA / BibTeX 格式文本 | 来源摘要预览、匹配等级与参考文献 |
+| 判断这次运行是否可靠 | 记录步骤、工具参数预览、耗时、告警及回退信息 | 运行审计与历史笔记 |
 
-## 演示截图
+**实现规模：9 个工作流节点 · 5 项 MCP 工具 · 3 种工具执行模式。**
 
-示例问题：
+注意：`confidence` 是摘要词汇匹配等级，不是事实正确率。当前不读取论文全文，也不保证检索结果与问题相关；研究结论仍需人工核对。
 
-```text
-How do retrieval augmented generation systems evaluate faithfulness?
-```
+## 界面预览
 
-### Agent workflow 与 claim audit
+以下截图来自本地 **Demo 模式实际运行**：使用仓库内的虚构论文样例、规则式摘要提取和进程内笔记，不调用外部模型。它们展示交互与执行流程，**不代表真实论文检索效果或模型准确率**。
 
-![ResearchPilot agent workflow and claim audit](docs/screenshots/1.png)
+![ResearchPilot 工作台：研究问题、九步工作流与摘要匹配结果，顶部标注 Demo](docs/screenshots/demo-workflow.png)
 
-### Literature review
+<details>
+<summary>展开查看：综述、论文来源、参考文献与工具调用</summary>
 
-![ResearchPilot literature review](docs/screenshots/2.png)
+### 结构化综述
 
-### Sources and citations
+结论旁展示来源摘要与匹配等级，方法区说明本次使用的是模型还是规则回退。
 
-![ResearchPilot sources and citations](docs/screenshots/3.png)
+![结构化综述与来源摘要](docs/screenshots/demo-review.png)
 
-### Bibliography
+### 论文来源
 
-![ResearchPilot bibliography](docs/screenshots/4.png)
+Demo 条目显式标记，不冒充实时搜索获得的论文。
 
-## 功能亮点
+![论文来源列表与引用](docs/screenshots/demo-sources.png)
 
-- 使用 FastAPI 提供 `/api/research/run` 和 `/health` 接口。
-- 使用 LangGraph `StateGraph` 编排多步骤 agent workflow。
-- 自定义 Research MCP Server，封装 `search_papers`、`fetch_paper_detail`、`format_citation`、`save_to_notes` 和 `search_notes` 等工具。
-- 后端支持 `local`、`mcp_single` 和 `mcp_persistent` 三种 tool client 模式。
-- 支持 arXiv 检索、Semantic Scholar fallback、结果去重和短期内存缓存。
-- 支持 DeepSeek API；未配置 key 时自动使用 deterministic abstract fallback，保证本地可以稳定演示。
-- 支持 demo mode，用本地 fixture papers 做稳定演示，并明确标记为 demo 数据。
-- 支持 IEEE、APA 和 BibTeX 引用格式生成。
-- 支持 Supabase notes 存储；未配置 Supabase 时自动回退到 in-memory notes。
-- 实现 evidence-first 输出：为关键 finding 关联 source paper、abstract snippet、confidence label 和 citation。
-- 前端 dashboard 展示 research plan、claim audit、literature review、paper sources、bibliography、workflow inspector 和 MCP tool call logs。
-- 覆盖 pytest 后端/MCP 测试和 Next.js TypeScript typecheck。
+### 参考文献
 
-## 技术栈
+![IEEE 格式参考文献输出](docs/screenshots/demo-citations.png)
 
-- Next.js App Router
-- React
-- TypeScript
-- Tailwind CSS
-- FastAPI
-- Pydantic
-- LangGraph
-- MCP-style tool adapter / MCP stdio server
-- DeepSeek Chat API
-- arXiv API
-- Semantic Scholar Graph API
-- Supabase / PostgreSQL / pgvector-ready schema
-- pytest
+### 工具调用审计
 
-## 系统架构
+可展开单次调用的输入、输出预览、耗时和状态；内存存储告警会保留。
+
+![工具调用审计面板](docs/screenshots/demo-audit.png)
+
+</details>
+
+复现方式见 [演示步骤](docs/DEMO_SCRIPT.md)。
+
+## 关键设计
+
+| 设计重点 | 实现与取舍 | 源码入口 |
+| --- | --- | --- |
+| 显式工作流 | 九个节点共享研究状态；流程由代码控制，补搜最多一轮，避免无限循环 | [graph.py](backend/app/agent/graph.py)、[nodes.py](backend/app/agent/nodes.py) |
+| 编排与工具解耦 | 同一工具接口支持本地函数、单次 stdio、持久 MCP 会话；持久模式通过后台事件循环和队列执行调用 | [client.py](backend/app/mcp_client/client.py)、[server.py](mcp_server/server.py) |
+| 可解释的降级 | 外部检索失败时尝试缓存，模型失败时提取摘要句子，MCP 失败时可回退本地工具，并返回告警 | [search_papers.py](mcp_server/tools/search_papers.py)、[nodes.py](backend/app/agent/nodes.py) |
+| 输出可核对 | 结论关联论文与摘要预览，保留低匹配结果；关键词启发式可解释，但不做语义蕴含判断 | [verification_service.py](backend/app/services/verification_service.py) |
+
+### 一次请求如何流转
 
 ```mermaid
-flowchart LR
-  subgraph Client["Next.js Dashboard"]
-    Form["Research Form"]
-    Review["Literature Review"]
-    Sources["Sources / Citations"]
-    Audit["Agent Audit"]
-    Inspector["Workflow Inspector"]
-  end
-
-  subgraph API["FastAPI Backend"]
-    RunAPI["POST /api/research/run"]
-    Graph["LangGraph StateGraph"]
-    Adapter["ResearchToolClient Adapter"]
-  end
-
-  subgraph MCP["Research MCP Server"]
-    Search["search_papers"]
-    Detail["fetch_paper_detail"]
-    Citation["format_citation"]
-    SaveNotes["save_to_notes"]
-    SearchNotes["search_notes"]
-  end
-
-  subgraph SourcesData["External / Local Sources"]
-    Arxiv["arXiv"]
-    Semantic["Semantic Scholar"]
-    DeepSeek["DeepSeek"]
-    Supabase["Supabase Notes"]
-    Memory["In-memory fallback"]
-    Demo["Demo fixtures"]
-  end
-
-  Form --> RunAPI --> Graph --> Adapter --> MCP
-  MCP --> Search --> Arxiv
-  Search --> Semantic
-  Search --> Demo
-  Graph --> DeepSeek
-  MCP --> SaveNotes --> Supabase
-  SaveNotes --> Memory
-  MCP --> SearchNotes --> Supabase
-  SearchNotes --> Memory
-  Graph --> Review
-  Graph --> Sources
-  Graph --> Audit
-  Graph --> Inspector
+flowchart TD
+    UI["Next.js 工作台"] --> API["FastAPI /api/research/run"]
+    API --> Graph["LangGraph：九节点研究状态工作流"]
+    Graph --> Adapter["ResearchToolClient"]
+    Adapter --> Local["local：直接调用 Python 函数"]
+    Adapter --> MCP["mcp_single / mcp_persistent：stdio 会话"]
+    Local --> Tools["五项研究工具"]
+    MCP --> Server["FastMCP Server"] --> Tools
+    Tools --> Search["arXiv / Semantic Scholar / Demo"]
+    Tools --> Notes["Supabase / 进程内笔记"]
+    Tools --> Citation["引用格式化"]
+    Graph --> Model["DeepSeek 摘要抽取 / 规则回退"]
+    Graph --> Result["综述、来源、引用与运行记录"]
+    Result --> UI
 ```
 
-更多架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+九个节点依次完成：**任务规划 → 笔记检索 → 论文搜索 → 元数据获取 → 候选结论抽取 → 摘要匹配 → 引用格式化 → 笔记保存 → 综述组装**。
 
-## Agent workflow
+`adaptive search` 在论文搜索节点内部触发，并非第十个节点。仅当已有结果非空、数量不足且包含非 Demo 论文时追加一次查询；不是由模型自主决定，也不是根据最终结论质量循环检索。
 
-ResearchPilot 的后端不是一次普通 completion，而是固定、可追踪的 research workflow：
+### MCP 工具与执行模式
 
-1. `plan_research_task`：规划研究任务、来源和引用格式。
-2. `search_notes`：检索历史 research notes，支持 memory reuse。
-3. `search_papers`：搜索 arXiv / Semantic Scholar / demo fixture。
-4. `adaptive_search`：当初始搜索覆盖不足时，自动扩展查询。
-5. `fetch_paper_details`：拉取或整理论文 metadata。
-6. `extract_summary`：使用 DeepSeek 或 deterministic fallback 抽取候选 findings。
-7. `verify_evidence`：基于 abstract snippet 做轻量证据校验并标记 confidence。
-8. `format_citations`：生成 IEEE / APA / BibTeX 引用。
-9. `save_notes`：保存有证据支持的 findings，供后续研究复用。
-10. `generate_final_review`：生成 structured literature review。
+五项工具：`search_papers`、`fetch_paper_detail`、`search_notes`、`save_to_notes`、`format_citation`。
 
-前端会展示 step trace、tool call input/output preview、duration、fallback_used、warnings、low-confidence claims 和 evidence coverage。
-
-## 目录结构
-
-```text
-backend/
-  app/
-    agent/              LangGraph state, graph, nodes
-    api/                FastAPI research route
-    core/               settings and logging
-    llm/                DeepSeek client
-    mcp_client/         local / MCP / persistent MCP adapters
-    models/             Pydantic response schemas
-    services/           citation, note, verification services
-  tests/                backend API and graph tests
-mcp_server/
-  clients/              arXiv and Semantic Scholar clients
-  data/                 demo paper fixtures
-  tools/                MCP-style tool implementations
-  tests/                MCP tool tests
-frontend/
-  app/research/         dashboard page
-  components/           form, review, sources, citations, inspector, audit panel
-  lib/                  API client and TypeScript types
-supabase/
-  schema.sql            pgvector-ready notes schema
-docs/
-  ARCHITECTURE.md
-  DEMO_SCRIPT.md
-  INTERVIEW_NOTES.md
-  screenshots/
-scripts/
-  run_backend.sh
-  run_frontend.sh
-  run_mcp_server.sh
-  test_all.sh
-```
+| 模式 | 执行方式 | 生命周期与限制 |
+| --- | --- | --- |
+| `local`（默认） | 直接调用工具函数，不经过 MCP 协议 | 笔记和缓存随后端进程存活 |
+| `mcp_single` | 每次工具调用启动 stdio 服务并初始化会话 | 进程内笔记不能跨工具调用保留 |
+| `mcp_persistent` | 复用 MCP 服务进程和会话 | 减少重复启动；不是数据库持久化，当前工具调用串行执行 |
 
 ## 本地运行
 
-在项目根目录执行：
+需要 Python、Node.js/npm，以及 Bash 环境（macOS / Linux；Windows 可使用 WSL）。本次验证环境和依赖版本见 [验证记录](docs/VALIDATION.md)。
 
 ```bash
+git clone https://github.com/AZ123IT/ResearchPilot.git
+cd ResearchPilot
 python3 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.txt -r mcp_server/requirements.txt
 cd frontend
 npm install
 cd ..
-cp .env.example .env
 ```
 
-编辑 `.env`：
+### 先运行无密钥演示
 
-```env
-DEEPSEEK_API_KEY=your_deepseek_api_key
-RESEARCHPILOT_DEMO_MODE=false
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
-```
-
-启动后端：
+终端一，在项目根目录执行。禁用本地 `.env` 读取，并清空可选服务凭据，避免误调用已有云服务：
 
 ```bash
-scripts/run_backend.sh
+PYTHON_DOTENV_DISABLED=1 DEEPSEEK_API_KEY= SUPABASE_URL= SUPABASE_SERVICE_ROLE_KEY= \
+RESEARCH_TOOL_CLIENT_MODE=local RESEARCHPILOT_DEMO_MODE=true scripts/run_backend.sh
 ```
 
-另开一个终端启动前端：
+终端二，同样在项目根目录执行：
 
 ```bash
 scripts/run_frontend.sh
 ```
 
-打开：
+打开 [研究工作台](http://127.0.0.1:3000/research)，或 [API 文档](http://127.0.0.1:8000/docs)。示例问题：`What are recent methods for improving RAG faithfulness?`
 
-```text
-http://127.0.0.1:3000/research
-```
+### 接入真实检索与模型
 
-如果只想做稳定演示，不依赖外部论文 API，可以启动 demo mode：
+从 [.env.example](.env.example) 复制一份本地 `.env`（已有文件不要覆盖），设置 `RESEARCHPILOT_DEMO_MODE=false`，按需填写 `DEEPSEEK_API_KEY`，再用 `scripts/run_backend.sh` 重启后端。arXiv 检索不需要模型密钥；模型未配置时仍会走规则式摘要提取。
 
-```bash
-RESEARCHPILOT_DEMO_MODE=true scripts/run_backend.sh
-```
+| 配置 | 用途 |
+| --- | --- |
+| `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL` | 可选的模型摘要抽取；最多输入前五篇论文的标题与摘要 |
+| `SEMANTIC_SCHOLAR_API_KEY` | 可选的 Semantic Scholar 凭据，使用受服务端限制 |
+| `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` | 可选的持久笔记存储；使用前执行 [schema.sql](supabase/schema.sql) |
+| `RESEARCH_TOOL_CLIENT_MODE` | `local`、`mcp_single` 或 `mcp_persistent` |
+| `MCP_FALLBACK_TO_LOCAL` | MCP 失败时是否允许回退本地工具；验证真实 MCP 链路时设为 `false` |
+| `NEXT_PUBLIC_API_BASE_URL` | 前端 API 地址；启动脚本从终端环境读取，默认 `http://127.0.0.1:8000` |
 
-## 环境变量
+MCP 独立入口为 `scripts/run_mcp_server.sh`。后端 MCP 模式由客户端启动服务，无需再手动启动一个服务进程；完整配置见 [架构与会话说明](docs/ARCHITECTURE.md#mcp-会话与工具边界)。
 
-使用 `.env.example` 作为模板，真实值放在本地 `.env`，不要提交。
+## 验证与测试
 
-```bash
-DEEPSEEK_API_KEY=
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-DEEPSEEK_MODEL=deepseek-chat
-ARXIV_TIMEOUT_SECONDS=10
-SEMANTIC_SCHOLAR_API_KEY=
-RESEARCHPILOT_DEMO_MODE=false
-
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_NOTES_TABLE=research_notes
-
-RESEARCH_TOOL_CLIENT_MODE=local
-MCP_SERVER_COMMAND=
-MCP_SERVER_ARGS=mcp_server/server.py
-MCP_SERVER_CWD=
-MCP_FALLBACK_TO_LOCAL=true
-
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
-```
-
-说明：
-
-- `DEEPSEEK_API_KEY` 是可选项。配置后启用 LLM-based finding extraction；未配置时使用 deterministic abstract fallback。
-- `SEMANTIC_SCHOLAR_API_KEY` 是可选项。公共搜索可不配置，配置后可改善 rate limit。
-- `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 是可选项。未配置时 notes 使用 in-memory fallback。
-- `RESEARCH_TOOL_CLIENT_MODE` 可选 `local`、`mcp_single` 或 `mcp_persistent`。
-- `RESEARCHPILOT_DEMO_MODE=true` 适合本地演示，使用 fixture papers，不代表实时外部搜索。
-
-## MCP 使用方式
-
-直接启动 MCP stdio server：
-
-```bash
-scripts/run_mcp_server.sh
-```
-
-后端 tool client 模式：
-
-- `local`：直接调用 Python tool function，适合本地开发和测试。
-- `mcp_single`：每次 tool call 启动一个 MCP stdio server。
-- `mcp_persistent`：复用一个 MCP stdio session，减少重复启动成本。
-
-示例配置：
-
-```env
-RESEARCH_TOOL_CLIENT_MODE=mcp_persistent
-MCP_SERVER_COMMAND=.venv/bin/python
-MCP_SERVER_ARGS=mcp_server/server.py
-MCP_SERVER_CWD=/absolute/path/to/researchpilot
-MCP_FALLBACK_TO_LOCAL=true
-```
-
-如果 MCP 模式启动失败且 fallback 开启，后端会记录 `fallback_used: true` 并使用 local tool fallback。
-
-## 演示流程
-
-推荐问题：
-
-```text
-How do retrieval augmented generation systems evaluate faithfulness?
-```
-
-运行后可以重点查看：
-
-1. 顶部指标：papers、claims、citations、calls。
-2. Research strategy and audit：研究计划、adaptive search 和 claim audit。
-3. Literature review：executive summary、evidence-backed findings、methods 和 limitations。
-4. Sources and citations：论文来源、证据等级、citation text。
-5. Bibliography：IEEE / APA / BibTeX 输出。
-6. Inspector：LangGraph steps、MCP tool calls、memory notes 和 warnings。
-
-完整演示脚本见 [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)。
-
-## 测试
-
-运行后端测试和前端 typecheck：
+**2026-10-03 本地验证：32 项 pytest 通过，TypeScript 类型检查通过。** 完整命令、构建与浏览器运行结果见 [验证记录](docs/VALIDATION.md)。
 
 ```bash
 scripts/test_all.sh
 ```
 
-也可以分别运行：
+测试覆盖工作流路由、API 响应结构、引用格式、摘要匹配、搜索缓存、工具模式和回退分支。**通过回归测试不等于检索质量已达标**：外部 API 主要使用模拟数据，当前没有真实查询集上的相关性/事实性评测，也没有已接入的 GitHub Actions CI。
 
-```bash
-.venv/bin/python -m pytest -q
-cd frontend
-npm run typecheck
-```
+## 技术栈与代码导航
 
-当前测试覆盖：
+| 层级 | 技术 | 入口 |
+| --- | --- | --- |
+| 交互与展示 | Next.js、React、TypeScript、Tailwind CSS | [frontend/app/research](frontend/app/research)、[components](frontend/components) |
+| API 与状态编排 | FastAPI、Pydantic、LangGraph | [backend/app/api](backend/app/api)、[agent](backend/app/agent) |
+| 工具协议与数据源 | MCP Python SDK / FastMCP、httpx | [mcp_server](mcp_server)、[mcp_client](backend/app/mcp_client) |
+| 模型与笔记 | DeepSeek、Supabase PostgreSQL / 内存存储 | [llm](backend/app/llm)、[notes.py](mcp_server/tools/notes.py) |
+| 回归验证 | pytest、TypeScript typecheck | [backend/tests](backend/tests)、[mcp_server/tests](mcp_server/tests) |
 
-- citation formatting
-- evidence verification
-- MCP search/detail/citation/note tools
-- Semantic Scholar response normalization
-- demo mode and cache fallback
-- MCP client mode selection and persistent fallback
-- LangGraph routing and FastAPI response shape
-- README/script reproducibility checks
+## 当前边界与改进方向
 
-## 安全说明
+- **摘要级处理**：不下载全文 PDF；摘要预览是截取文本，不是精确定位到支持句。
+- **启发式匹配**：关键词重合不能判断否定、因果或问题相关性，`high` 也可能误报。下一步应先建立相关性与结论支持度评测集，再改进检索和校验。
+- **固定工作流**：不是多智能体自主协作；规划和综述组装由代码模板完成，尚无流式事件或断点续跑。
+- **有限笔记复用**：按关键词检索并展示历史笔记，不将其注入 DeepSeek 上下文；`vector(1536)` 仅为预留字段，未实现向量检索。
+- **本地单用户**：没有认证、租户隔离、公开部署或生产容量验证。持久 MCP 会话与内存缓存都不能替代数据库。
 
-- 不要提交 `.env`。
-- 不要把 `DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 或任何 API key 放进截图、commit、issue 或 README。
-- 只有 `NEXT_PUBLIC_` 前缀的变量可以被前端读取。
-- demo mode 使用本地 fixture papers，并明确标记为 `source: "demo"`。
-- 当前项目没有登录系统，定位是本地单用户研究工具，不是多用户生产系统。
+安全提示：不要提交 `.env`，不要向前端暴露服务密钥。启用 DeepSeek 会发送问题与论文标题/摘要；启用 Supabase 会存储笔记。不要使用未经许可的敏感研究资料。
 
-## 已知限制
-
-- 当前只基于 paper abstract 做证据校验，不读取全文 PDF。
-- confidence label 使用 keyword overlap，是轻量 guardrail，不等同于完整事实核查。
-- Supabase schema 已预留 `embedding vector(1536)` 字段，但目前还没有生成 embeddings，也没有启用向量相似度检索。
-- arXiv keyword search 可能返回弱相关论文；系统会通过 confidence label 和 limitations 暴露这个问题，而不是隐藏它。
-- 项目还没有线上部署、认证系统或 CI/CD。
-
-## 后续改进
-
-- 增加 PDF ingestion 和 section-level evidence。
-- 生成 embeddings，并用 pgvector 做 notes similarity search。
-- 增加 streaming workflow events。
-- 优化 arXiv / Semantic Scholar 的跨源排序。
-- 增加生产级 auth、部署配置和浏览器端 E2E 测试。
-
-## 简历写法
-
-**ResearchPilot：MCP 学术科研效率助手 / 个人全栈 AI Agent 项目**
-
-- 基于 Next.js、FastAPI、LangGraph 和自定义 MCP-style tools 构建本地学术研究助手，实现论文检索、证据抽取、引用生成、memory reuse 和 structured literature review。
-- 设计多步骤 Agent workflow，覆盖 planning、paper search、metadata lookup、summary extraction、evidence verification、citation formatting 和 note saving，并在前端展示 step trace 与 tool call logs。
-- 实现 evidence-first 输出机制，为关键结论关联 source paper、abstract snippet、confidence label 和 IEEE / APA / BibTeX citation，提高研究结果可追溯性。
-- 支持 demo mode、fallback handling、本地 memory storage、README、启动脚本和自动化测试检查，便于稳定展示 portfolio demo。
+更多说明：[架构与实现取舍](docs/ARCHITECTURE.md) · [演示与故障排查](docs/DEMO_SCRIPT.md) · [验证记录](docs/VALIDATION.md) · [技术问答](docs/INTERVIEW_NOTES.md)
