@@ -7,6 +7,7 @@
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C)
 ![MCP](https://img.shields.io/badge/MCP-FastMCP-6E56CF)
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **An academic research agent workflow built on LangGraph and MCP. Start from a research question, then search papers, extract findings, link evidence, and format citations, with every tool call and fallback recorded.**
 
@@ -185,3 +186,7 @@ ResearchPilot/
 Security: never commit `.env` or expose service keys to the frontend. Enabling DeepSeek sends the question and paper titles/abstracts to the model; enabling Supabase stores notes.
 
 More documentation (Chinese): [Architecture](docs/ARCHITECTURE.md) · [Demo and troubleshooting](docs/DEMO_SCRIPT.md) · [Validation record](docs/VALIDATION.md) · [Design FAQ](docs/DESIGN_FAQ.md)
+
+## License
+
+Released under the [MIT License](LICENSE).

@@ -7,6 +7,7 @@
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C)
 ![MCP](https://img.shields.io/badge/MCP-FastMCP-6E56CF)
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **基于 LangGraph + MCP 的学术研究 Agent 工作流：从一个研究问题出发，完成论文检索、结论抽取、证据关联与引用生成，并完整记录每一步的工具调用与降级路径。**
 
@@ -185,3 +186,7 @@ ResearchPilot/
 安全提示：不要提交 `.env`，不要向前端暴露服务密钥。启用 DeepSeek 会发送问题与论文标题/摘要；启用 Supabase 会存储笔记。
 
 更多文档：[架构与实现取舍](docs/ARCHITECTURE.md) · [演示与故障排查](docs/DEMO_SCRIPT.md) · [验证记录](docs/VALIDATION.md) · [设计问答](docs/DESIGN_FAQ.md)
+
+## 许可证
+
+本项目基于 [MIT License](LICENSE) 开源。
