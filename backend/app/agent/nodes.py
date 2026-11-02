@@ -24,6 +24,13 @@ from app.models.schemas import (
 from app.services.verification_service import verify_findings
 
 
+QUERY_SCAFFOLDING_WORDS = {
+    "a", "about", "an", "and", "are", "best", "can", "common", "current", "do", "does", "for",
+    "how", "improve", "improves", "improving", "in", "is", "latest", "methods", "of", "on", "recent",
+    "the", "to", "use", "used", "uses", "using", "what", "when", "which", "why", "with", "work", "works",
+}
+
+
 def plan_research_task(state: ResearchGraphState) -> dict[str, Any]:
     planned_sources = ["demo"] if get_settings().demo_mode else ["arxiv", "semantic_scholar"]
     plan = _research_plan(planned_sources, state["citation_style"])
@@ -68,7 +75,7 @@ def search_notes_node(state: ResearchGraphState) -> dict[str, Any]:
             state,
             AgentStep(
                 step_name="search_notes",
-                status="success" if log.status == "error" else log.status,
+                status="warning" if log.status == "error" else log.status,
                 tool_name="search_notes",
                 summary=f"Found {len(notes)} reusable research notes.",
                 input=tool_input,
@@ -598,7 +605,13 @@ def _should_run_adaptive_search(papers: list[Paper], max_results: int) -> bool:
 
 
 def _refined_search_query(question: str) -> str:
-    return f"{question} evidence coverage citation verification"
+    # Re-query with the topic terms only; question scaffolding dilutes keyword search.
+    terms: list[str] = []
+    for term in "".join(char if char.isalnum() or char == "-" else " " for char in question).split():
+        lowered = term.lower()
+        if lowered not in QUERY_SCAFFOLDING_WORDS and len(lowered) > 1 and lowered not in terms:
+            terms.append(lowered)
+    return " ".join(terms) or question
 
 
 def _merge_papers(existing: list[Paper], candidates: list[Paper]) -> list[Paper]:

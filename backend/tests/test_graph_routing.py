@@ -173,6 +173,8 @@ def test_note_search_failure_does_not_crash_workflow(monkeypatch):
     assert response.steps[-1].step_name == "generate_final_review"
     assert any("search_notes failed" in warning for warning in response.warnings)
     assert response.prior_notes == []
+    notes_step = next(step for step in response.steps if step.step_name == "search_notes")
+    assert notes_step.status == "warning"
 
 
 def test_deterministic_fallback_review_is_structured_and_marks_weak_evidence(monkeypatch):
@@ -292,7 +294,7 @@ def test_adaptive_search_runs_second_pass_when_initial_search_has_low_coverage(m
     )
 
     assert len(tool_client.queries) == 2
-    assert "evidence coverage" in tool_client.queries[1]
+    assert tool_client.queries[1] == "rag faithfulness"
     assert response.adaptive_search.triggered is True
     assert response.adaptive_search.added_papers == 1
     assert response.adaptive_search.refined_query == tool_client.queries[1]
