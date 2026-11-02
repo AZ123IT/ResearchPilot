@@ -34,7 +34,7 @@ Next.js /research
 | 8 | `save_notes_node` | 保存匹配等级非 low 的结论 |
 | 9 | `generate_final_review_node` | 模板化组装综述、方法、限制和运行记录 |
 
-补搜条件为：已有论文非空、少于目标数量、包含非 Demo 来源。改写方式为在原问题后追加固定词组 `evidence coverage citation verification`，最多一轮。零结果不会触发该补搜；最终匹配等级也不会反向触发它。[具体逻辑](../backend/app/agent/nodes.py)
+补搜条件为：已有论文非空、少于目标数量、包含非 Demo 来源。改写方式为去掉疑问词等问句结构、只保留主题词（如 `rag faithfulness`），最多一轮。零结果不会触发该补搜；最终匹配等级也不会反向触发它。[具体逻辑](../backend/app/agent/nodes.py)
 
 ## MCP 会话与工具边界
 
@@ -68,7 +68,7 @@ MCP_FALLBACK_TO_LOCAL=false
 
 ## 检索与缓存
 
-`auto` 模式先查 arXiv，数量不足时尝试 Semantic Scholar，随后规范化和去重。arXiv 查询使用问题文本，并按提交日期排序；没有语义重排或经过评测的相关性门控。
+`auto` 模式先查 arXiv，数量不足时尝试 Semantic Scholar，随后规范化和去重。arXiv 查询先从问题中提取主题词，构造字段化查询（如 `all:rag AND all:faithfulness`），按相关度排序；AND 无结果时放宽为 OR。早期版本直接提交整句问题并按提交日期排序，同一示例问题返回的 5 篇论文均不相关，改后 5 篇均为 RAG faithfulness 相关论文（见[验证记录](VALIDATION.md)）。仍没有语义重排或经过评测的相关性门控。
 
 成功检索结果进入进程内缓存，键由规范化问题、source 和 max_results 组成，TTL 为 600 秒。它用于失败/无结果时的回退，**不是每次优先读缓存的 cache-first 方案**，也不跨进程共享。
 
@@ -76,7 +76,7 @@ Demo 必须显式开启，使用 [虚构论文样例](../mcp_server/data/demo_pa
 
 ## 模型与摘要匹配
 
-DeepSeek 输入研究问题及前五篇论文的标题、摘要，不接收全文、历史笔记或工具定义。模型输出按非空行解析成候选结论；当前尚未使用严格结构化输出，前言也可能被误计为一条结论。未配置密钥或调用异常时，使用确定性规则提取摘要句子。[模型调用](../backend/app/llm/deepseek_client.py)
+DeepSeek 输入研究问题及前五篇论文的标题、摘要，不接收全文、历史笔记或工具定义。调用使用 JSON 输出模式（`response_format=json_object`），按 `findings` 数组解析；若返回非 JSON，则按列表行解析，去掉编号、Markdown 标记和以冒号结尾的引导语。模型输出仍需经过后续摘要匹配，不因格式正确就视为可信。未配置密钥或调用异常时，使用确定性规则提取摘要句子。[模型调用](../backend/app/llm/deepseek_client.py)
 
 摘要匹配将文本转成英文关键词集合，过滤停用词与短词后计算：
 

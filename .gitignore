@@ -16,3 +16,5 @@ docs/superpowers/plans/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+output/
+tmp/

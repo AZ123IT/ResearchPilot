@@ -34,7 +34,7 @@ def test_local_setup_and_stage5_docs_exist():
 
     for doc in [
         "docs/ARCHITECTURE.md",
-        "docs/INTERVIEW_NOTES.md",
+        "docs/DESIGN_FAQ.md",
         "docs/DEMO_SCRIPT.md",
     ]:
         path = PROJECT_ROOT / doc

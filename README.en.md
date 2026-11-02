@@ -2,105 +2,98 @@
 
 [简体中文](README.md) | **English**
 
-**An inspectable research workflow for paper search, abstract synthesis, and citation formatting.**
+[![CI](https://github.com/AZ123IT/ResearchPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/AZ123IT/ResearchPilot/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C)
+![MCP](https://img.shields.io/badge/MCP-FastMCP-6E56CF)
+![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs)
 
-Start with a research question and inspect candidate papers, abstract-level findings, source links, references, and the tool calls and fallbacks behind each run. Built for preliminary literature research with **LangGraph state orchestration, an MCP tool layer, and a Next.js workspace**. Currently a local, single-user application.
+**An academic research agent workflow built on LangGraph and MCP. Start from a research question, then search papers, extract findings, link evidence, and format citations, with every tool call and fallback recorded.**
 
-[Screenshots](#screenshots) | [Key Design Decisions](#key-design-decisions) | [Run Locally](#run-locally) | [Validation Record (Chinese)](docs/VALIDATION.md) | [Architecture (Chinese)](docs/ARCHITECTURE.md)
+ResearchPilot searches arXiv and Semantic Scholar, uses DeepSeek to extract candidate findings from abstracts, links each finding to a source paper and abstract snippet, formats IEEE / APA / BibTeX citations, and shows the full run (steps, tool calls, latency, warnings, fallbacks) in a Next.js workspace.
 
-## Overview
+[Screenshots](#screenshots) · [Architecture](#architecture) · [Run Locally](#run-locally) · [Architecture details (Chinese)](docs/ARCHITECTURE.md) · [Validation record (Chinese)](docs/VALIDATION.md)
 
-| User need | Implementation | Inspectable output |
-| --- | --- | --- |
-| Find papers for a research question | Search arXiv, try Semantic Scholar if results are insufficient, and conditionally run one additional query | Paper titles, authors, abstracts, and sources |
-| Organize preliminary findings | Extract candidate findings with DeepSeek, or select abstract sentences using rules when the model is unavailable | A structured review, methods, and limitations |
-| Check findings against source material | Associate papers using abstract keyword overlap and format IEEE / APA / BibTeX references | Abstract previews, match levels, and references |
-| Understand what happened during a run | Record workflow steps, tool argument previews, durations, warnings, and fallbacks | Run audit and research notes |
+## Highlights
 
-**Implementation: 9 workflow nodes, 5 MCP tools, and 3 tool execution modes.**
-
-`confidence` represents lexical overlap with abstracts, not factual accuracy. The application does not read full papers or guarantee that retrieved results are relevant to the question. Findings require manual review.
+- **9-node LangGraph state workflow**: plan → search notes → search papers → fetch metadata → extract findings → verify evidence → format citations → save notes → generate review, with one adaptive search round when results are insufficient.
+- **Research MCP server** built with the MCP Python SDK / FastMCP, exposing `search_papers`, `fetch_paper_detail`, `search_notes`, `save_to_notes`, and `format_citation`. The backend's tool adapter supports **local calls, per-call MCP stdio, and a persistent MCP session**.
+- **Multi-source retrieval with an evidence trail**: fielded arXiv topic-term queries sorted by relevance, Semantic Scholar as a supplement, and every finding linked to a source paper, abstract snippet, and match level.
+- **Structured LLM output**: DeepSeek runs in JSON mode; non-JSON replies are cleaned of numbering, markdown, and lead-in lines.
+- **Observability and graceful degradation**: step traces, tool call logs, run audit, and warnings; search caching, deterministic fallback when DeepSeek fails, local fallback when MCP fails, and in-memory notes when Supabase is unavailable.
+- **Tests and CI**: 39 pytest cases cover workflow routing, tool calls, parsing, and each fallback path; GitHub Actions runs pytest, the TypeScript typecheck, and a Next.js production build.
 
 ## Screenshots
 
-These screenshots show an **actual local run in Demo mode**, using fictional sample papers bundled with the repository, rule-based abstract extraction, and in-memory notes. No external model is called. They demonstrate the interface and execution flow, **not real-world retrieval quality or model accuracy**.
+These screenshots come from **demo mode** (bundled sample papers, rule-based extraction, no API keys needed) and show the interaction and execution flow.
 
-![ResearchPilot workspace showing a research question, the nine-step workflow, abstract matches, and the Demo label](docs/screenshots/demo-workflow.png)
+![ResearchPilot workspace showing a research question, the nine-step workflow, and abstract matches](docs/screenshots/demo-workflow.png)
 
 <details>
-<summary>View the review, paper sources, bibliography, and tool calls</summary>
+<summary>Show the review, sources, references, and tool call audit</summary>
 
 ### Structured Review
 
-Findings include source abstracts and match levels. The methods section identifies whether the run used a model or a rule-based fallback.
+Findings appear with source abstracts and match levels. The methods section states whether the model or the rule-based fallback produced them.
 
 ![Structured review with source abstracts](docs/screenshots/demo-review.png)
 
 ### Paper Sources
 
-Demo entries are explicitly labeled rather than presented as live search results.
-
 ![Paper sources and citations](docs/screenshots/demo-sources.png)
 
-### Bibliography
+### References
 
 ![IEEE-formatted bibliography](docs/screenshots/demo-citations.png)
 
 ### Tool Call Audit
 
-Expand a call to inspect its input, output preview, duration, and status. Warnings about in-memory storage remain visible.
+Each tool call can be expanded to show its input, output preview, latency, and status. Warnings and fallbacks are kept.
 
 ![Tool call audit panel](docs/screenshots/demo-audit.png)
 
 </details>
 
-See the [demo walkthrough (Chinese)](docs/DEMO_SCRIPT.md) to reproduce the run.
-
-## Key Design Decisions
-
-| Design focus | Implementation and trade-off | Source |
-| --- | --- | --- |
-| Explicit workflow | Nine nodes share research state. Code controls execution, with at most one additional search round to avoid unbounded loops | [graph.py](backend/app/agent/graph.py), [nodes.py](backend/app/agent/nodes.py) |
-| Separate orchestration from tools | One tool interface supports local functions, one-shot stdio sessions, and a persistent MCP session. Persistent mode uses a background event loop and a queue | [client.py](backend/app/mcp_client/client.py), [server.py](mcp_server/server.py) |
-| Visible fallbacks | Try cached search results after external retrieval failures, select abstract sentences after model failures, and optionally fall back to local tools after MCP failures, with warnings | [search_papers.py](mcp_server/tools/search_papers.py), [nodes.py](backend/app/agent/nodes.py) |
-| Inspectable findings | Link findings to papers and abstract previews while retaining low-match results. Keyword heuristics are explainable but do not establish semantic entailment | [verification_service.py](backend/app/services/verification_service.py) |
-
-### Request Flow
+## Architecture
 
 ```mermaid
 flowchart TD
     UI["Next.js workspace"] --> API["FastAPI /api/research/run"]
-    API --> Graph["LangGraph: nine-node research workflow"]
+    API --> Graph["LangGraph: nine-node research state workflow"]
     Graph --> Adapter["ResearchToolClient"]
     Adapter --> Local["local: direct Python function calls"]
     Adapter --> MCP["mcp_single / mcp_persistent: stdio sessions"]
     Local --> Tools["Five research tools"]
-    MCP --> Server["FastMCP Server"] --> Tools
+    MCP --> Server["FastMCP server"] --> Tools
     Tools --> Search["arXiv / Semantic Scholar / Demo"]
-    Tools --> Notes["Supabase / in-memory notes"]
+    Tools --> Notes["Supabase / in-process notes"]
     Tools --> Citation["Citation formatting"]
-    Graph --> Model["DeepSeek abstract extraction / rule-based fallback"]
+    Graph --> Model["DeepSeek extraction / rule-based fallback"]
     Graph --> Result["Review, sources, citations, and run records"]
     Result --> UI
 ```
 
-The nine nodes run in order: **task planning -> note search -> paper search -> metadata lookup -> candidate finding extraction -> abstract matching -> citation formatting -> note saving -> review assembly**.
+### Key Design Decisions
 
-`adaptive search` runs inside the paper search node, not as a tenth node. It adds one query only when the existing results are nonempty, below the requested count, and include a non-Demo paper. The model does not decide when to search again, and final finding quality does not drive a retrieval loop.
-
-### MCP Tools and Execution Modes
-
-Five tools: `search_papers`, `fetch_paper_detail`, `search_notes`, `save_to_notes`, and `format_citation`.
-
-| Mode | Execution | Lifecycle and limitations |
+| Focus | Implementation and trade-offs | Source |
 | --- | --- | --- |
-| `local` (default) | Call tool functions directly, without the MCP protocol | In-memory notes and caches live with the backend process |
-| `mcp_single` | Start a stdio server and initialize a session for each tool call | In-memory notes do not survive across tool calls |
-| `mcp_persistent` | Reuse an MCP server process and session | Avoid repeated startup; this is not database persistence, and tool calls currently run serially |
+| Explicit workflow | Nine nodes share research state and the flow is controlled in code; adaptive search triggers inside the search node and runs at most once | [graph.py](backend/app/agent/graph.py), [nodes.py](backend/app/agent/nodes.py) |
+| Orchestration decoupled from tools | One tool interface over local functions, per-call stdio, or a persistent MCP session; persistent mode runs calls through a background event loop and queue | [client.py](backend/app/mcp_client/client.py), [server.py](mcp_server/server.py) |
+| Retrieval relevance | Topic terms are pulled out of the question into an `all:term AND all:term` query sorted by relevance, loosened to OR when nothing matches; adaptive search also uses topic terms only | [arxiv_client.py](mcp_server/clients/arxiv_client.py), [search_papers.py](mcp_server/tools/search_papers.py) |
+| Explainable degradation | Search failures use the cache, model failures use rule-based extraction, MCP failures fall back to local tools, and all of them surface as warnings | [search_papers.py](mcp_server/tools/search_papers.py), [nodes.py](backend/app/agent/nodes.py) |
+| Checkable output | Findings link to papers and abstract snippets with high / medium / low keyword-coverage levels; low matches stay visible and are flagged | [verification_service.py](backend/app/services/verification_service.py) |
+
+### MCP Execution Modes
+
+| Mode | Execution | Use case |
+| --- | --- | --- |
+| `local` (default) | Calls tool functions directly, without the MCP protocol | Local development and tests |
+| `mcp_single` | Starts a stdio server and initializes a session per tool call | Exercising the full protocol path |
+| `mcp_persistent` | Reuses one MCP server process and session; calls run serially | Avoiding repeated startup cost |
 
 ## Run Locally
 
-Requires Python, Node.js/npm, and Bash (macOS / Linux, or WSL on Windows). See the [validation record (Chinese)](docs/VALIDATION.md) for the tested environment and dependency versions.
+Requires Python 3.12+, Node.js 20+, and Bash (macOS / Linux, or WSL on Windows).
 
 ```bash
 git clone https://github.com/AZ123IT/ResearchPilot.git
@@ -112,66 +105,83 @@ npm install
 cd ..
 ```
 
-### Start with the No-Key Demo
+### No-Key Demo
 
-In the first terminal, run the following from the repository root. This disables local `.env` loading and clears optional service credentials to avoid accidentally using configured cloud services:
+First terminal, from the repository root. This disables `.env` loading and clears optional credentials so only the bundled samples are used:
 
 ```bash
 PYTHON_DOTENV_DISABLED=1 DEEPSEEK_API_KEY= SUPABASE_URL= SUPABASE_SERVICE_ROLE_KEY= \
 RESEARCH_TOOL_CLIENT_MODE=local RESEARCHPILOT_DEMO_MODE=true scripts/run_backend.sh
 ```
 
-In a second terminal, also from the repository root:
+Second terminal, from the repository root:
 
 ```bash
 scripts/run_frontend.sh
 ```
 
-Open the [research workspace](http://127.0.0.1:3000/research) or the [API documentation](http://127.0.0.1:8000/docs). Example question: `What are recent methods for improving RAG faithfulness?`
+Open the [research workspace](http://127.0.0.1:3000/research) or the [API docs](http://127.0.0.1:8000/docs). Example question: `What are recent methods for improving RAG faithfulness?`
 
-### Enable Live Retrieval and Model Extraction
+### Live Search and Model
 
-Copy [.env.example](.env.example) to a local `.env` without overwriting an existing file. Set `RESEARCHPILOT_DEMO_MODE=false`, optionally provide `DEEPSEEK_API_KEY`, and restart the backend with `scripts/run_backend.sh`. arXiv retrieval does not require a model API key; without a configured model, the workflow uses rule-based abstract extraction.
+Copy [.env.example](.env.example) to `.env`, set `RESEARCHPILOT_DEMO_MODE=false`, add `DEEPSEEK_API_KEY` if you want model extraction, and restart the backend with `scripts/run_backend.sh`. arXiv search needs no key; without a model key, rule-based extraction is used.
 
-| Configuration | Purpose |
+| Setting | Purpose |
 | --- | --- |
-| `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` | Optional model-based extraction from the titles and abstracts of at most the first five papers |
-| `SEMANTIC_SCHOLAR_API_KEY` | Optional Semantic Scholar credentials; usage remains subject to service limits |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional persistent note storage; apply [schema.sql](supabase/schema.sql) before use |
+| `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` | Optional model extraction (titles and abstracts of the first five papers) |
+| `SEMANTIC_SCHOLAR_API_KEY` | Optional Semantic Scholar credential |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional persistent notes; run [schema.sql](supabase/schema.sql) first |
 | `RESEARCH_TOOL_CLIENT_MODE` | `local`, `mcp_single`, or `mcp_persistent` |
-| `MCP_FALLBACK_TO_LOCAL` | Allow local tool fallback after MCP failures; set to `false` when verifying the actual MCP path |
-| `NEXT_PUBLIC_API_BASE_URL` | Frontend API URL; the startup script reads it from the terminal environment, defaulting to `http://127.0.0.1:8000` |
+| `MCP_FALLBACK_TO_LOCAL` | Whether MCP failures fall back to local tools; set to `false` to exercise the real MCP path |
+| `NEXT_PUBLIC_API_BASE_URL` | Frontend API URL, default `http://127.0.0.1:8000` |
 
-The standalone MCP entry point is `scripts/run_mcp_server.sh`. In backend MCP modes, the client starts the server, so a separate manually started server process is unnecessary. See [MCP sessions and tool boundaries (Chinese)](docs/ARCHITECTURE.md#mcp-会话与工具边界) for details.
+The MCP server can also run on its own with `scripts/run_mcp_server.sh`. In MCP modes the backend launches the server process itself; see the [architecture notes (Chinese)](docs/ARCHITECTURE.md#mcp-会话与工具边界).
 
-## Validation and Tests
-
-**Local validation on 2026-10-03: 32 pytest tests passed, and TypeScript type checking passed.** Commands, build results, and browser checks are documented in the [validation record (Chinese)](docs/VALIDATION.md).
+## Tests
 
 ```bash
 scripts/test_all.sh
 ```
 
-Tests cover workflow routing, API response structure, citation formatting, abstract matching, search caching, tool modes, and fallback branches. **Passing regression tests does not establish retrieval quality.** External APIs are mainly mocked in tests. The project does not currently include relevance/factuality evaluation on a real query set or a configured GitHub Actions CI workflow.
+Runs all pytest suites and the frontend TypeScript typecheck; CI also runs a Next.js production build. Tests cover workflow routing, API response shape, arXiv query construction, LLM output parsing, citation formatting, abstract matching, search caching, all three tool modes, and each fallback branch. External services are mocked; see the [validation record (Chinese)](docs/VALIDATION.md).
 
-## Stack and Code Navigation
+## Project Structure
 
-| Layer | Technologies | Entry points |
-| --- | --- | --- |
-| Interface | Next.js, React, TypeScript, Tailwind CSS | [frontend/app/research](frontend/app/research), [components](frontend/components) |
-| API and state orchestration | FastAPI, Pydantic, LangGraph | [backend/app/api](backend/app/api), [agent](backend/app/agent) |
-| Tool protocol and data sources | MCP Python SDK / FastMCP, httpx | [mcp_server](mcp_server), [mcp_client](backend/app/mcp_client) |
-| Model and notes | DeepSeek, Supabase PostgreSQL / in-memory storage | [llm](backend/app/llm), [notes.py](mcp_server/tools/notes.py) |
-| Regression checks | pytest, TypeScript typecheck | [backend/tests](backend/tests), [mcp_server/tests](mcp_server/tests) |
+```text
+ResearchPilot/
+├── backend/
+│   ├── app/agent/          # LangGraph state, nodes, and graph
+│   ├── app/mcp_client/     # Tool adapter: local / mcp_single / mcp_persistent
+│   ├── app/llm/            # DeepSeek client and structured-output parsing
+│   ├── app/services/       # Evidence verification, citations, notes
+│   └── tests/
+├── mcp_server/
+│   ├── server.py           # FastMCP tool registration
+│   ├── tools/              # The five research tools
+│   ├── clients/            # arXiv / Semantic Scholar clients
+│   └── tests/
+├── frontend/               # Next.js + TypeScript + Tailwind workspace
+├── supabase/schema.sql     # Notes table schema
+└── docs/                   # Architecture, demo, validation, design FAQ
+```
 
-## Limitations and Next Steps
+## Tech Stack
 
-- **Abstract-level processing:** No full-text PDF downloads. Abstract previews are truncated text, not precisely located supporting sentences.
-- **Heuristic matching:** Keyword overlap cannot assess negation, causality, or question relevance. Even a `high` match can be wrong. The next step is to establish relevance and finding-support evaluation sets before improving retrieval and verification.
-- **Fixed workflow:** This is not autonomous multi-agent collaboration. Planning and review assembly use code templates; event streaming and checkpoint-based resume are not implemented.
-- **Limited note reuse:** Historical notes are retrieved by keywords and displayed, but not injected into DeepSeek context. `vector(1536)` is a reserved schema field, not implemented vector retrieval.
-- **Local, single-user scope:** No authentication, tenant isolation, public deployment, or production capacity validation. Persistent MCP sessions and in-memory caches do not replace a database.
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS |
+| API and orchestration | FastAPI, Pydantic, LangGraph |
+| Tool protocol | MCP Python SDK / FastMCP, httpx |
+| Model and storage | DeepSeek (OpenAI-compatible API), Supabase PostgreSQL / in-memory |
+| Quality | pytest, TypeScript typecheck, GitHub Actions |
 
-Security: Do not commit `.env` or expose service keys to the frontend. Enabling DeepSeek sends the question and paper titles/abstracts to the model provider; enabling Supabase stores notes there. Do not use sensitive research material without authorization.
+## Known Limitations and Roadmap
 
-Further documentation is currently in Chinese: [Architecture and Trade-offs](docs/ARCHITECTURE.md) | [Demo and Troubleshooting](docs/DEMO_SCRIPT.md) | [Validation Record](docs/VALIDATION.md) | [Technical Q&A](docs/INTERVIEW_NOTES.md).
+- **Abstract-level evidence**: the workflow reads abstracts, not full papers. `high / medium / low` is a keyword-coverage level, not factual accuracy, and cannot detect negation or causality. Planned: NLI / semantic-similarity verification and a hand-labelled evaluation set for relevance and claim support.
+- **Retrieval quality**: search now uses fielded topic-term queries sorted by relevance, but there is no semantic re-ranking yet. Next: embedding-based re-ranking and relevance filtering, with adaptive search triggered by weak evidence rather than low counts.
+- **Note reuse**: prior notes are retrieved by keyword and displayed, but not yet injected into the model context; the `vector(1536)` column is reserved for vector search.
+- **Deployment scope**: a local single-user application with no authentication or tenant isolation.
+
+Security: never commit `.env` or expose service keys to the frontend. Enabling DeepSeek sends the question and paper titles/abstracts to the model; enabling Supabase stores notes.
+
+More documentation (Chinese): [Architecture](docs/ARCHITECTURE.md) · [Demo and troubleshooting](docs/DEMO_SCRIPT.md) · [Validation record](docs/VALIDATION.md) · [Design FAQ](docs/DESIGN_FAQ.md)

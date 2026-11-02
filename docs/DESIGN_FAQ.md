@@ -1,4 +1,4 @@
-# 技术问答与取舍
+# 设计问答与取舍
 
 [返回项目首页](../README.md) · [架构详解](ARCHITECTURE.md) · [验证记录](VALIDATION.md)
 
